@@ -648,7 +648,8 @@ void CANFrameModel::addFrame(const CANFrame& frame, bool autoRefresh = false)
         bool found = false;
         for (int i = 0; i < frames.count(); i++)
         {
-            if ( (frames[i].frameId() == tempFrame.frameId()) && (frames[i].bus == tempFrame.bus) )
+            if ( (frames[i].frameId() == tempFrame.frameId()) && (frames[i].bus == tempFrame.bus)
+                 && (frames[i].isReceived == tempFrame.isReceived) )
             {
                 tempFrame.frameCount = frames[i].frameCount + 1;
                 tempFrame.timedelta = tempFrame.timeStamp().microSeconds() - frames[i].timeStamp().microSeconds();
@@ -673,7 +674,8 @@ void CANFrameModel::addFrame(const CANFrame& frame, bool autoRefresh = false)
         {
             for (int j = 0; j < filteredFrames.count(); j++)
             {
-                if ( (filteredFrames[j].frameId() == tempFrame.frameId()) && (filteredFrames[j].bus == tempFrame.bus) )
+                if ( (filteredFrames[j].frameId() == tempFrame.frameId()) && (filteredFrames[j].bus == tempFrame.bus)
+                     && (filteredFrames[j].isReceived == tempFrame.isReceived) )
                 {
                     if (autoRefresh) beginResetModel();
                     filteredFrames.replace(j, tempFrame);
