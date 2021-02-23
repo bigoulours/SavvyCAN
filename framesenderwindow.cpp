@@ -704,7 +704,7 @@ void FrameSenderWindow::processTriggerText(int line)
                 QString tok = trigToks.at(x);
                 if (tok.left(2) == "ID")
                 {
-                    thisTrigger.ID = Utility::ParseStringToNum(tok.right(tok.length() - 2));
+                    thisTrigger.ID = Utility::ParseStringToNum(tok.right(tok.length() - 3));
                     if (thisTrigger.maxCount == -1) thisTrigger.maxCount = 10000000;
 
                     if (thisTrigger.milliseconds == -1) thisTrigger.milliseconds = 0; //by default don't count, just send it upon trigger
@@ -855,9 +855,10 @@ void FrameSenderWindow::processCellChange(int line, int col)
             qDebug() << "Setting enabled to " << sendingData[line].enabled;
             break;
         case 1: //Bus designation
-            tempVal = Utility::ParseStringToNum(ui->tableSender->item(line, 1)->text());            
+            tempVal = Utility::ParseStringToNum(ui->tableSender->item(line, 1)->text());
             if (tempVal < -1) tempVal = -1;
-            if (tempVal >= numBuses) tempVal = numBuses - 1;
+            ////sending message on given bus (even if no corresponding hardware connection)
+            //if (tempVal >= numBuses) tempVal = numBuses - 1;
             sendingData[line].bus = tempVal;
             qDebug() << "Setting bus to " << tempVal;
             break;
