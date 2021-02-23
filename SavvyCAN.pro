@@ -16,6 +16,8 @@ DEFINES += QCUSTOMPLOT_USE_OPENGL
 TARGET = SavvyCAN
 TEMPLATE = app
 
+RC_ICONS = icon_text-hex.ico
+
 SOURCES += main.cpp\
     connections/mqtt_bus.cpp \
     mqtt/qmqtt_client.cpp \
