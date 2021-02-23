@@ -1584,7 +1584,7 @@ bool FrameFileIO::loadCanalyzerASC(QString filename, QVector<CANFrame>* frames)
                 else
                 {
                     thisFrame.setFrameId(tokens[2].toUInt(nullptr, 16));
-                    thisFrame.setExtendedFrameFormat(false);
+                    thisFrame.setExtendedFrameFormat(thisFrame.frameId() > 0x7FF);  //some .asc files have extended IDs without 'x'
                 }
 
                 int payloadLen = tokens[5].toInt();
@@ -1682,7 +1682,7 @@ bool FrameFileIO::saveCanalyzerASC(QString filename, const QVector<CANFrame>* fr
         if (tsLen > 3) precision = 9 - tsLen;
         outFile->write(QString::number((frame->timeStamp().microSeconds() - offsetTime) / 1000000.0, 'f', precision).rightJustified(10, ' ').toUtf8());
         outFile->putChar(' ');
-        outFile->write(QString::number(frame->bus + 1).toUtf8());
+        outFile->write(QString::number(frames->at(c).bus).toUtf8());
         outFile->write("  ");
         if (frames->at(c).hasExtendedFrameFormat())
         {
