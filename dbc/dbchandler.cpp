@@ -1765,7 +1765,7 @@ void DBCHandler::swapFiles(int pos1, int pos2)
     if (pos2 < 0) return;
     if (pos2 >= loadedFiles.count()) return;
 
-    loadedFiles.swapItemsAt(pos1, pos2);
+    loadedFiles.swap(pos1, pos2);
 }
 
 /*
