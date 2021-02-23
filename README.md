@@ -1,3 +1,10 @@
+This is a slightly modified fork of [SavvyCAN](https://github.com/collin80/SavvyCAN).
+It brings following features:
+* support for socketcand connections
+* reordering of the connections
+* bus filtering in main window
+* reimplementation of continuous logging: everything received is saved (original seems to make a mess in overwrite mode)
+
 # SavvyCAN
 Qt based cross platform canbus tool 
 (C) 2015-2021 EVTV and Collin Kidder
