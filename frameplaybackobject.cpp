@@ -120,7 +120,7 @@ void FramePlaybackObject::piStart()
 {
     playbackTimer = new QTimer();
     playbackTimer->setTimerType(Qt::PreciseTimer);
-    playbackTimer->setInterval(1);
+    playbackTimer->setInterval(playbackInterval);
 
     currentPosition = 0;
     playbackActive = false;
@@ -195,7 +195,7 @@ void FramePlaybackObject::startPlaybackForward()
 
     if (useOrigTiming)
     {
-        playbackTimer->setInterval(1);
+        playbackTimer->setInterval(playbackInterval);
         playbackElapsed.start();
         if (currentSeqItem->data[currentPosition].timeStamp().microSeconds() > 2000)
             playbackLastTimeStamp = currentSeqItem->data[currentPosition].timeStamp().microSeconds() - 2000;
@@ -218,7 +218,7 @@ void FramePlaybackObject::startPlaybackBackward()
     if (useOrigTiming)
     {
         playbackElapsed.start();
-        playbackTimer->setInterval(1);
+        playbackTimer->setInterval(playbackInterval);
         playbackLastTimeStamp = currentSeqItem->data[currentPosition].timeStamp().microSeconds() + 2000;
     }
     playbackTimer->start();
