@@ -98,6 +98,7 @@ GraphingWindow::GraphingWindow(const QVector<CANFrame> *frames, QWidget *parent)
 
     needScaleSetup = true;
     followGraphEnd = false;
+    autoRescale = true;
 }
 
 GraphingWindow::~GraphingWindow()
@@ -217,6 +218,10 @@ void GraphingWindow::updatedFrames(int numFrames)
                     start = end - size;
                     ui->graphingView->xAxis->setRange(start, end);
                 }
+            }
+            if (autoRescale)
+            {
+                rescaleAxes();
             }
             ui->graphingView->replot();
         }
@@ -461,6 +466,33 @@ bool GraphingWindow::eventFilter(QObject *obj, QEvent *event)
     return false;
 }
 
+void GraphingWindow::rescaleAxes()
+{
+    double yminval = ui->graphingView->yAxis->range().lower;
+    double ymaxval = ui->graphingView->yAxis->range().upper;
+    double xminval = ui->graphingView->xAxis->range().lower;
+    double xmaxval = ui->graphingView->xAxis->range().upper;
+    for (int i = 0; i < graphParams.count(); i++)
+    {
+        for (int j = 0; j < graphParams[i].x.count(); j++)
+        {
+            //if (graphParams[i].x[j] < xminval) xminval = graphParams[i].x[j];
+            if (graphParams[i].x[j] > xminval)
+            {
+                if (graphParams[i].x[j] > xmaxval) xmaxval = graphParams[i].x[j];
+                if (graphParams[i].y[j] < yminval) yminval = graphParams[i].y[j];
+                if (graphParams[i].y[j] > ymaxval) ymaxval = graphParams[i].y[j];
+            }
+        }
+    }
+
+    ui->graphingView->xAxis->setRange(xminval, xmaxval);
+    ui->graphingView->yAxis->setRange(yminval, ymaxval);
+    ui->graphingView->axisRect()->setupFullAxesBox();
+
+    ui->graphingView->replot();
+}
+
 void GraphingWindow::resetView()
 {
     double yminval=10000000.0, ymaxval = -1000000.0;
@@ -545,6 +577,7 @@ void GraphingWindow::removeSelectedGraph()
     if (graphParams.count() == 0) needScaleSetup = true;
 
     ui->graphingView->replot();
+    resetView();
   }
 }
 
@@ -586,6 +619,13 @@ void GraphingWindow::removeAllGraphs()
 void GraphingWindow::toggleFollowMode()
 {
     followGraphEnd = !followGraphEnd;
+    if (followGraphEnd) autoRescale = false;
+}
+
+void GraphingWindow::toggleAutoRescale()
+{
+    autoRescale = !autoRescale;
+    if (autoRescale) followGraphEnd = false;
 }
 
 void GraphingWindow::contextMenuRequest(QPoint pos)
@@ -607,9 +647,14 @@ void GraphingWindow::contextMenuRequest(QPoint pos)
     menu->addAction(tr("Save graph definitions to file"), this, SLOT(saveDefinitions()));
     menu->addAction(tr("Load graph definitions from file"), this, SLOT(loadDefinitions()));
     menu->addAction(tr("Save spreadsheet of data"), this, SLOT(saveSpreadsheet()));
-    QAction *act = menu->addAction(tr("Follow end of graph"), this, SLOT(toggleFollowMode()));
-    act->setCheckable(true);
-    act->setChecked(followGraphEnd);
+    menu->addSeparator();
+    QAction *actFollowGraphEnd = menu->addAction(tr("Follow end of graph"), this, SLOT(toggleFollowMode()));
+    actFollowGraphEnd->setCheckable(true);
+    actFollowGraphEnd->setChecked(followGraphEnd);
+    QAction *actAutoRescale = menu->addAction(tr("Auto rescale graph"), this, SLOT(toggleAutoRescale()));
+    actAutoRescale->setCheckable(true);
+    actAutoRescale->setChecked(autoRescale);
+    menu->addSeparator();
     menu->addAction(tr("Add new graph"), this, SLOT(addNewGraph()));
     if (ui->graphingView->selectedGraphs().size() > 0)
     {
@@ -843,36 +888,13 @@ void GraphingWindow::saveDefinitions()
             outFile->putChar(',');
             outFile->write(QString::number(iter->stride).toUtf8());
             outFile->putChar(',');
-            outFile->write(QString::number(iter->lineColor.red()).toUtf8());
+            outFile->write(QString::number(iter->color.red()).toUtf8());
             outFile->putChar(',');
-            outFile->write(QString::number(iter->lineColor.green()).toUtf8());
+            outFile->write(QString::number(iter->color.green()).toUtf8());
             outFile->putChar(',');
-            outFile->write(QString::number(iter->lineColor.blue()).toUtf8());
+            outFile->write(QString::number(iter->color.blue()).toUtf8());
             outFile->putChar(',');
             outFile->write(iter->graphName.toUtf8());
-            outFile->putChar(',');
-            outFile->write(QString::number(iter->fillColor.red()).toUtf8());
-            outFile->putChar(',');
-            outFile->write(QString::number(iter->fillColor.green()).toUtf8());
-            outFile->putChar(',');
-            outFile->write(QString::number(iter->fillColor.blue()).toUtf8());
-            outFile->putChar(',');
-            outFile->write(QString::number(iter->fillColor.alpha()).toUtf8());
-            outFile->putChar(',');
-            if (iter->drawOnlyPoints) outFile->putChar('Y');
-                else outFile->putChar('N');
-            outFile->putChar(',');
-            outFile->write(QString::number(iter->pointType).toUtf8());
-            outFile->putChar(',');
-            outFile->write(QString::number(iter->lineWidth).toUtf8());
-            if (iter->associatedSignal)
-            {
-                outFile->putChar(',');
-                outFile->write(iter->associatedSignal->parentMessage->name.toUtf8());
-                outFile->putChar(',');
-                outFile->write(iter->associatedSignal->name.toUtf8());
-            }
-
             outFile->write("\n");
         }
         outFile->close();
@@ -891,195 +913,175 @@ void GraphingWindow::loadDefinitions()
     if (dbcHandler == nullptr) return;
     if (dbcHandler->getFileCount() == 0) dbcHandler->createBlankFile();
 
-    dialog.setFileMode(QFileDialog::ExistingFile);
+    dialog.setFileMode(QFileDialog::ExistingFiles);
     dialog.setNameFilters(filters);
     dialog.setViewMode(QFileDialog::Detail);
     dialog.setDirectory(settings.value("Graphing/LoadSaveDirectory", dialog.directory().path()).toString());
 
     if (dialog.exec() == QDialog::Accepted)
     {
-        filename = dialog.selectedFiles()[0];
-        settings.setValue("Graphing/LoadSaveDirectory", dialog.directory().path());
+        for (int i = 0; i < dialog.selectedFiles().count(); i++)
+        {
+            filename = dialog.selectedFiles()[i];
+            settings.setValue("Graphing/LoadSaveDirectory", dialog.directory().path());
 
-        QFile *inFile = new QFile(filename);
-        QByteArray line;
+            QFile *inFile = new QFile(filename);
+            QByteArray line;
 
-        if (!inFile->open(QIODevice::ReadOnly | QIODevice::Text))
-            return;
+            if (!inFile->open(QIODevice::ReadOnly | QIODevice::Text))
+                return;
 
-        while (!inFile->atEnd()) {
-            line = inFile->readLine().simplified();
-            if (line.length() > 2)
-            {
-                GraphParams gp;
-
-                QList<QByteArray> tokens = line.split(',');
-
-                gp.associatedSignal = nullptr; //might not be saved in the graph definition so default it to nothing
-
-                if (tokens[0] == "X") //newest format based around signals
+            while (!inFile->atEnd()) {
+                line = inFile->readLine().simplified();
+                if (line.length() > 2)
                 {
-                    gp.ID = tokens[1].toUInt(nullptr, 16);
-                    gp.mask = tokens[2].toULongLong(nullptr, 16);
-                    gp.startBit = tokens[3].toInt();
-                    if (gp.startBit < 0) {
-                        gp.intelFormat = false;
-                        gp.startBit *= -1;
-                    }
-                    else gp.intelFormat = true;
-                    gp.numBits = tokens[4].toInt();
-                    if (tokens[5] == "Y") gp.isSigned = true;
-                        else gp.isSigned = false;
-                    gp.bias = tokens[6].toFloat();
-                    gp.scale = tokens[7].toFloat();
-                    gp.stride = tokens[8].toInt();
+                    GraphParams gp;
 
-                    gp.lineColor.setRed( tokens[9].toInt() );
-                    gp.lineColor.setGreen( tokens[10].toInt() );
-                    gp.lineColor.setBlue( tokens[11].toInt() );
-                    if (tokens.length() > 12)
-                        gp.graphName = tokens[12];
-                    else
-                        gp.graphName = QString();
-                   if (tokens.length() > 19) //even newer format with extra graph formatting options
-                   {
-                       gp.fillColor.setRed( tokens[13].toInt() );
-                       gp.fillColor.setGreen( tokens[14].toInt() );
-                       gp.fillColor.setBlue( tokens[15].toInt() );
-                       gp.fillColor.setAlpha( tokens[16].toInt() );
-                       if (tokens[17] == "Y") gp.drawOnlyPoints = true;
-                       else gp.drawOnlyPoints = false;
-                       gp.pointType = tokens[18].toInt();
-                       gp.lineWidth = tokens[19].toInt();
-                   }
-                   if (tokens.length() > 21)
-                   {
-                       DBC_MESSAGE *msg = dbcHandler->findMessage(tokens[20]);
-                       if (msg)
-                       {
-                            gp.associatedSignal = msg->sigHandler->findSignalByName(tokens[21]);
-                       }
-                       else qDebug() << "Couldn't find the message by name! " << tokens[20] << "  " << tokens[21];
-                   }
+                    QList<QByteArray> tokens = line.split(',');
 
-                   createGraph(gp, true);
-                }
-                else //one of the two older formats then
-                {
-                    gp.ID = tokens[0].toUInt(nullptr, 16);
-                    if (tokens[1] == "S") //old signal based graph definition
+                    if (tokens[0] == "X") //newest format based around signals
                     {
-                        //tokens[2] is the signal name. Need to use the message ID and this name to look it up
-                        DBC_MESSAGE *msg = dbcHandler->getFileByIdx(0)->messageHandler->findMsgByID(gp.ID);
-                        if (msg != nullptr)
-                        {
-                            DBC_SIGNAL *sig = msg->sigHandler->findSignalByName(tokens[2]);
-                            if (sig)
-                            {
-                                gp.mask = 0xFFFFFFFF;
-                                gp.bias = (float)sig->bias;
-                                gp.lineColor.setRed(tokens[3].toInt());
-                                gp.lineColor.setGreen(tokens[4].toInt());
-                                gp.lineColor.setBlue(tokens[5].toInt());
-                                gp.graphName = sig->name;
-                                gp.intelFormat = sig->intelByteOrder;
-                                if (sig->valType == SIGNED_INT) gp.isSigned = true;
-                                    else gp.isSigned = false;
-                                gp.numBits = sig->signalSize;
-                                gp.scale = (float)sig->factor;
-                                gp.startBit = sig->startBit;
-                                gp.stride = 1;
-                                createGraph(gp, true);
-                            }
-                        }
-                    }
-                    else //old standard graph definition
-                    {
-                        //hard part - this all changed drastically
-                        //the difference between intel and motorola format is whether
-                        //start is larger than end byte or not.
-                        uint64_t oldMask = tokens[1].toULongLong(nullptr, 16);
-                        int oldStart = tokens[2].toInt();
-                        int oldEnd = tokens[3].toInt();
-
-                        if (oldEnd > oldStart) //motorola / big endian - hell...
-                        {
+                        gp.ID = tokens[1].toUInt(nullptr, 16);
+                        gp.mask = tokens[2].toULongLong(nullptr, 16);
+                        gp.startBit = tokens[3].toInt();
+                        if (gp.startBit < 0) {
                             gp.intelFormat = false;
-                            //for now just naively use the entire bytes called for.
-                            gp.startBit = 8 * oldStart + 7;
-                            gp.numBits = (oldEnd - oldStart + 1) * 8;
+                            gp.startBit *= -1;
                         }
-                        else if (oldStart > oldEnd) //intel / little endian - easiest of multi-byte types
-                        {
-                            //have to find both ends. start bit is somewhere in oldEnd and last bit is somewhere in
-                            //oldStart.
-
-                            gp.intelFormat = true;
-
-                            //start by setting a safe default if nothing else pans out.
-                            gp.startBit = 8 * oldEnd;
-
-                            int numBytes = oldStart - oldEnd + 1;
-                            gp.numBits = numBytes * 8;
-
-                            for (int b = 0; b < 8; b++)
-                            {
-                                if (oldMask & (1ull << b))
-                                {
-                                    gp.startBit = (8 * oldEnd) + b;
-                                    break;
-                                }
-                            }
-
-                            for (int c = 7; c >= 0; c--)
-                            {
-                                if ( oldMask & (1ull << (((numBytes - 1) * 8) + c)) )
-                                {
-                                    gp.numBits -= (7-c);
-                                    break;
-                                }
-                            }
-                        }
-                        else //within a single byte - easier than the above two by a bit - always use intel format for this
-                        {
-                            gp.intelFormat = true;
-                            oldMask = oldMask & 0xFF; //only this part matters
-                            //for intel format we give startbit as the lowest bit number in the signal
-                            //we can find that by going backward from bit 0 to 7 and picking the first bit that is 1.
-                            //that's our start bit (+ 8*oldStart)
-                            //set default first in case the rest falls through
-                            gp.startBit = 8 * oldStart;
-                            gp.numBits = 8;
-                            for (int b = 0; b < 8; b++)
-                            {
-                                if (oldMask & (1ull << b))
-                                {
-                                    gp.startBit = 8 * oldStart + b;
-                                    gp.numBits = 8 - b;
-                                    break;
-                                }
-                            }
-                        }
-
-                        //the rest is easy stuff
-                        if (tokens[4] == "Y") gp.isSigned = true;
+                        else gp.intelFormat = true;
+                        gp.numBits = tokens[4].toInt();
+                        if (tokens[5] == "Y") gp.isSigned = true;
                             else gp.isSigned = false;
-                        gp.bias = tokens[5].toFloat();
-                        gp.scale = tokens[6].toFloat();
-                        gp.stride = tokens[7].toInt();
-                        gp.lineColor.setRed(tokens[8].toInt());
-                        gp.lineColor.setGreen(tokens[9].toInt());
-                        gp.lineColor.setBlue(tokens[10].toInt());
-                        if (tokens.length() > 11)
-                            gp.graphName = tokens[11];
+                        gp.bias = tokens[6].toFloat();
+                        gp.scale = tokens[7].toFloat();
+                        gp.stride = tokens[8].toInt();
+
+                        gp.color.setRed(tokens[9].toInt());
+                        gp.color.setGreen(tokens[10].toInt());
+                        gp.color.setBlue(tokens[11].toInt());
+                        if (tokens.length() > 12)
+                            gp.graphName = tokens[12];
                         else
                             gp.graphName = QString();
                         createGraph(gp, true);
                     }
+                    else //one of the two older formats then
+                    {
+                        gp.ID = tokens[0].toUInt(nullptr, 16);
+                        if (tokens[1] == "S") //old signal based graph definition
+                        {
+                            //tokens[2] is the signal name. Need to use the message ID and this name to look it up
+                            DBC_MESSAGE *msg = dbcHandler->getFileByIdx(0)->messageHandler->findMsgByID(gp.ID);
+                            if (msg != nullptr)
+                            {
+                                DBC_SIGNAL *sig = msg->sigHandler->findSignalByName(tokens[2]);
+                                if (sig)
+                                {
+                                    gp.mask = 0xFFFFFFFF;
+                                    gp.bias = (float)sig->bias;
+                                    gp.color.setRed(tokens[3].toInt());
+                                    gp.color.setGreen(tokens[4].toInt());
+                                    gp.color.setBlue(tokens[5].toInt());
+                                    gp.graphName = sig->name;
+                                    gp.intelFormat = sig->intelByteOrder;
+                                    if (sig->valType == SIGNED_INT) gp.isSigned = true;
+                                        else gp.isSigned = false;
+                                    gp.numBits = sig->signalSize;
+                                    gp.scale = (float)sig->factor;
+                                    gp.startBit = sig->startBit;
+                                    gp.stride = 1;
+                                    createGraph(gp, true);
+                                }
+                            }
+                        }
+                        else //old standard graph definition
+                        {
+                            //hard part - this all changed drastically
+                            //the difference between intel and motorola format is whether
+                            //start is larger than end byte or not.
+                            uint64_t oldMask = tokens[1].toULongLong(nullptr, 16);
+                            int oldStart = tokens[2].toInt();
+                            int oldEnd = tokens[3].toInt();
+
+                            if (oldEnd > oldStart) //motorola / big endian - hell...
+                            {
+                                gp.intelFormat = false;
+                                //for now just naively use the entire bytes called for.
+                                gp.startBit = 8 * oldStart + 7;
+                                gp.numBits = (oldEnd - oldStart + 1) * 8;
+                            }
+                            else if (oldStart > oldEnd) //intel / little endian - easiest of multi-byte types
+                            {
+                                //have to find both ends. start bit is somewhere in oldEnd and last bit is somewhere in
+                                //oldStart.
+
+                                gp.intelFormat = true;
+
+                                //start by setting a safe default if nothing else pans out.
+                                gp.startBit = 8 * oldEnd;
+
+                                int numBytes = oldStart - oldEnd + 1;
+                                gp.numBits = numBytes * 8;
+
+                                for (int b = 0; b < 8; b++)
+                                {
+                                    if (oldMask & (1ull << b))
+                                    {
+                                        gp.startBit = (8 * oldEnd) + b;
+                                        break;
+                                    }
+                                }
+
+                                for (int c = 7; c >= 0; c--)
+                                {
+                                    if ( oldMask & (1ull << (((numBytes - 1) * 8) + c)) )
+                                    {
+                                        gp.numBits -= (7-c);
+                                        break;
+                                    }
+                                }
+                            }
+                            else //within a single byte - easier than the above two by a bit - always use intel format for this
+                            {
+                                gp.intelFormat = true;
+                                oldMask = oldMask & 0xFF; //only this part matters
+                                //for intel format we give startbit as the lowest bit number in the signal
+                                //we can find that by going backward from bit 0 to 7 and picking the first bit that is 1.
+                                //that's our start bit (+ 8*oldStart)
+                                //set default first in case the rest falls through
+                                gp.startBit = 8 * oldStart;
+                                gp.numBits = 8;
+                                for (int b = 0; b < 8; b++)
+                                {
+                                    if (oldMask & (1ull << b))
+                                    {
+                                        gp.startBit = 8 * oldStart + b;
+                                        gp.numBits = 8 - b;
+                                        break;
+                                    }
+                                }
+                            }
+
+                            //the rest is easy stuff
+                            if (tokens[4] == "Y") gp.isSigned = true;
+                                else gp.isSigned = false;
+                            gp.bias = tokens[5].toFloat();
+                            gp.scale = tokens[6].toFloat();
+                            gp.stride = tokens[7].toInt();
+                            gp.color.setRed(tokens[8].toInt());
+                            gp.color.setGreen(tokens[9].toInt());
+                            gp.color.setBlue(tokens[10].toInt());
+                            if (tokens.length() > 11)
+                                gp.graphName = tokens[11];
+                            else
+                                gp.graphName = QString();
+                            createGraph(gp, true);
+                        }
+                    }
                 }
             }
+            inFile->close();
         }
-        inFile->close();
     }
 }
 
@@ -1241,27 +1243,11 @@ void GraphingWindow::createGraph(GraphParams &params, bool createGraphParam)
     ui->graphingView->graph()->setProperty("id", params.ID);
 
     ui->graphingView->graph()->setData(refParam->x,refParam->y);
-
-    ui->graphingView->graph()->setScatterStyle(QCPScatterStyle((QCPScatterStyle::ScatterShape)params.pointType));
-
-    if (params.drawOnlyPoints) ui->graphingView->graph()->setLineStyle(QCPGraph::lsNone); //Draw only the points, no connections, no fills
-    else
-    {
-        ui->graphingView->graph()->setLineStyle(QCPGraph::lsLine); //connect points with lines
-    }
-
+    ui->graphingView->graph()->setLineStyle(QCPGraph::lsLine); //connect points with lines
     QPen graphPen;
-    graphPen.setColor(params.lineColor);
-    graphPen.setWidth(params.lineWidth);
+    graphPen.setColor(params.color);
+    graphPen.setWidth(1);
     ui->graphingView->graph()->setPen(graphPen);
-    if (params.fillColor.alpha() > 0) //only if there is some opacity will we set up a fill brush
-    {
-        qDebug() << "Drawing filled graph";
-        QBrush fillBrush;
-        fillBrush.setColor(params.fillColor);
-        fillBrush.setStyle(Qt::SolidPattern);
-        ui->graphingView->graph()->setBrush(fillBrush);
-    }
 
     qDebug() << "xmin: " << xminval;
     qDebug() << "xmax: " << xmaxval;
@@ -1277,6 +1263,7 @@ void GraphingWindow::createGraph(GraphParams &params, bool createGraphParam)
     }
 
     ui->graphingView->replot();
+    resetView();
 }
 
 void GraphingWindow::moveLegend()

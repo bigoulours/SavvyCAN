@@ -23,11 +23,7 @@ public:
     double scale;
     int stride;
     int strideSoFar;
-    QColor lineColor;
-    QColor fillColor;
-    int lineWidth;
-    bool drawOnlyPoints;
-    int pointType;
+    QColor color;
     QCPGraph *ref;
     QString graphName;
     DBC_SIGNAL *associatedSignal;
@@ -64,12 +60,14 @@ private slots:
     void saveDefinitions();
     void loadDefinitions();
     void toggleFollowMode();
+    void toggleAutoRescale();
     void addNewGraph();
     void createGraph(GraphParams &params, bool createGraphParam = true);
     void appendToGraph(GraphParams &params, CANFrame &frame, QVector<double> &x, QVector<double> &y);
     void editSelectedGraph();
     void updatedFrames(int);
     void gotCenterTimeID(int32_t ID, double timestamp);
+    void rescaleAxes();
     void resetView();
     void zoomIn();
     void zoomOut();
@@ -91,6 +89,7 @@ private:
     bool secondsMode;
     bool useOpenGL;
     bool followGraphEnd;
+    bool autoRescale;
 
     void showParamsDialog(int idx);
     void closeEvent(QCloseEvent *event);
