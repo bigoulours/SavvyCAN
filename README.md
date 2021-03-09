@@ -1,3 +1,6 @@
+EDIT: my modifications have been merged into the original project.\
+It is therefore advised to clone the original one.\
+\
 This is a slightly modified fork of [SavvyCAN](https://github.com/collin80/SavvyCAN).
 It brings following features:
 * support for socketcand connections
