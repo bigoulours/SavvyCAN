@@ -26,18 +26,19 @@ enum DBC_SIG_VAL_TYPE
 
 enum DBC_ATTRIBUTE_VAL_TYPE
 {
-    QINT,
-    QFLOAT,
-    QSTRING,
-    ENUM
+    ATTR_INT,
+    ATTR_FLOAT,
+    ATTR_STRING,
+    ATTR_ENUM,
 };
 
 enum DBC_ATTRIBUTE_TYPE
 {
-    GENERAL,
-    NODE,
-    MESSAGE,
-    SIG
+    ATTR_TYPE_GENERAL,
+    ATTR_TYPE_NODE,
+    ATTR_TYPE_MESSAGE,
+    ATTR_TYPE_SIG,
+    ATTR_TYPE_ANY
 };
 
 class DBC_ATTRIBUTE
@@ -82,6 +83,7 @@ public:
 };
 
 class DBC_MESSAGE; //forward reference so that DBC_SIGNAL can compile before we get to real definition of DBC_MESSAGE
+class DBC_SIGNAL;
 
 class DBC_SIGNAL
 {
@@ -92,7 +94,8 @@ public: //TODO: this is sloppy. It shouldn't all be public!
     bool intelByteOrder; //true is obviously little endian. False is big endian
     bool isMultiplexor;
     bool isMultiplexed;
-    int multiplexValue;
+    int multiplexHighValue;
+    int multiplexLowValue;
     DBC_SIG_VAL_TYPE valType;
     double factor;
     double bias;
@@ -105,12 +108,15 @@ public: //TODO: this is sloppy. It shouldn't all be public!
     QVariant cachedValue;
     QList<DBC_ATTRIBUTE_VALUE> attributes;
     QList<DBC_VAL_ENUM_ENTRY> valList;
+    QList<DBC_SIGNAL *> multiplexedChildren;
+    DBC_SIGNAL *multiplexParent;
 
     DBC_SIGNAL();
     bool processAsText(const CANFrame &frame, QString &outString, bool outputName = true);
     bool processAsInt(const CANFrame &frame, int32_t &outValue);
     bool processAsDouble(const CANFrame &frame, double &outValue);
     QString makePrettyOutput(double floatVal, int64_t intVal, bool outputName = true, bool isInteger = false);
+    QString processSignalTree(const CANFrame &frame);
     DBC_ATTRIBUTE_VALUE *findAttrValByName(QString name);
     DBC_ATTRIBUTE_VALUE *findAttrValByIdx(int idx);
 
@@ -118,6 +124,9 @@ public: //TODO: this is sloppy. It shouldn't all be public!
     {
         return (l.name.toLower() < r.name.toLower());
     }
+private:
+    bool isSignalInMessage(const CANFrame &frame);
+    bool _sigInMsgPriv(const CANFrame &frame, DBC_SIGNAL *multiplexor);
 };
 
 class DBCSignalHandler; //forward declaration to keep from having to include dbchandler.h in this file and thus create a loop

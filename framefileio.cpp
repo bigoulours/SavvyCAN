@@ -1584,7 +1584,7 @@ bool FrameFileIO::loadCanalyzerASC(QString filename, QVector<CANFrame>* frames)
                 else
                 {
                     thisFrame.setFrameId(tokens[2].toUInt(nullptr, 16));
-                    thisFrame.setExtendedFrameFormat(false);
+                    thisFrame.setExtendedFrameFormat(thisFrame.frameId() > 0x7FF);  //some .asc files have extended IDs without 'x'
                 }
 
                 int payloadLen = tokens[5].toInt();
@@ -4375,7 +4375,7 @@ bool FrameFileIO::loadCLX000File(QString filename, QVector<CANFrame>* frames) {
         pattern += valueSeparator;
     }
     if(presentFields.contains("ID")) {
-        pattern += "(?<id>[a-fA-F\\d]{3,8})";
+        pattern += "(?<id>[a-fA-F\\d]{1,8})";
         pattern += valueSeparator;
     }
     if(presentFields.contains("Length")) {
@@ -4418,7 +4418,7 @@ bool FrameFileIO::loadCLX000File(QString filename, QVector<CANFrame>* frames) {
             if(res.captured("type").length() != 0) {
                 auto frameType = res.captured("type").toUInt();
 
-                currentFrame.isReceived = (frameType & 0x08);
+                currentFrame.isReceived = !(frameType & 0x08);
                 currentFrame.setExtendedFrameFormat(frameType & 0x01);
             }
 
